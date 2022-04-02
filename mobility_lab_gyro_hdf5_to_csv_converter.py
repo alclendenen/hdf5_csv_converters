@@ -6,14 +6,20 @@ import h5py
 import csv
 import math
 import numpy as np
+import tkinter as tk
+from tkinter import filedialog
 
 
 def get_hd5_files():
+    root = tk.Tk()
+    root.withdraw()
+    dir_path = filedialog.askdirectory()
+
     hd5_files = list()
-    for file in os.listdir("./"):
+    for file in os.listdir(dir_path):
         if file.endswith(".hd5") or file.endswith(".h5"):
-            hd5_files.append(file)
-    return hd5_files
+            hd5_files.append(os.path.join(dir_path, file))
+    return hd5_files, dir_path
 
 
 def get_config_file():
@@ -29,9 +35,9 @@ def parse_config_file(file):
     return file_dict
 
 
-def parse_hd5_files(hd5_files, file_config_dict):
+def parse_hd5_files(hd5_files, result_data_dict):
     for file in hd5_files:
-        if file in file_config_dict:
+        try:
             with h5py.File(file, "r") as f:
                 # print(list(f['Annotations']))
                 # print(f['Processed']['13746']['Orientation'])
@@ -69,50 +75,51 @@ def parse_hd5_files(hd5_files, file_config_dict):
                 file_dict['sacrum']['gyroscope'] = list(f['Sensors']['13864']['Gyroscope'])
                 file_dict['sacrum']['given_time'] = list(f['Sensors']['13864']['Time'])
 
-                temp_dict = {
-                    file: {'sternum': dict(), 'sacrum': dict()}
-                }
-                temp_dict[file]['sternum']['given_time'] = list(f['Sensors']['13746']['Time'])
-                temp_dict[file]['sacrum']['given_time'] = list(f['Sensors']['13864']['Time'])
+                temp_dict = {'sternum': dict(), 'sacrum': dict()}
+                temp_dict['sternum']['given_time'] = list(f['Sensors']['13746']['Time'])
+                temp_dict['sacrum']['given_time'] = list(f['Sensors']['13864']['Time'])
                 for sensor_key, sensor_dict in file_dict.items():
                     if 'sacrum' in sensor_key or 'sternum' in sensor_key:
                         for group_key, group_list in sensor_dict.items():
                             if 'gyroscope' in group_key or 'accelerometer' in group_key:
                                 for i, sub_l in enumerate(group_list):
                                     if i != 0:
-                                        temp_dict[file][sensor_key][group_key + "_x"].append(float(sub_l[0]))
-                                        temp_dict[file][sensor_key][group_key + "_y"].append(float(sub_l[1]))
-                                        temp_dict[file][sensor_key][group_key + "_z"].append(float(sub_l[2]))
-                                        temp_dict[file][sensor_key][group_key + "_abs_x"].append(abs(temp_dict[file][sensor_key][group_key + "_x"][-1]))
-                                        temp_dict[file][sensor_key][group_key + "_abs_y"].append(abs(temp_dict[file][sensor_key][group_key + "_y"][-1]))
-                                        temp_dict[file][sensor_key][group_key + "_abs_z"].append(abs(temp_dict[file][sensor_key][group_key + "_z"][-1]))
-                                        temp_dict[file][sensor_key][group_key + "_abs_x_sum"][0] += temp_dict[file][sensor_key][group_key + "_abs_x"][-1]
-                                        temp_dict[file][sensor_key][group_key + "_abs_y_sum"][0] += temp_dict[file][sensor_key][group_key + "_abs_y"][-1]
-                                        temp_dict[file][sensor_key][group_key + "_abs_z_sum"][0] += temp_dict[file][sensor_key][group_key + "_abs_z"][-1]
+                                        temp_dict[sensor_key][group_key + "_x"].append(float(sub_l[0]))
+                                        temp_dict[sensor_key][group_key + "_y"].append(float(sub_l[1]))
+                                        temp_dict[sensor_key][group_key + "_z"].append(float(sub_l[2]))
+                                        temp_dict[sensor_key][group_key + "_abs_x"].append(abs(temp_dict[sensor_key][group_key + "_x"][-1]))
+                                        temp_dict[sensor_key][group_key + "_abs_y"].append(abs(temp_dict[sensor_key][group_key + "_y"][-1]))
+                                        temp_dict[sensor_key][group_key + "_abs_z"].append(abs(temp_dict[sensor_key][group_key + "_z"][-1]))
+                                        temp_dict[sensor_key][group_key + "_abs_x_sum"][0] += temp_dict[sensor_key][group_key + "_abs_x"][-1]
+                                        temp_dict[sensor_key][group_key + "_abs_y_sum"][0] += temp_dict[sensor_key][group_key + "_abs_y"][-1]
+                                        temp_dict[sensor_key][group_key + "_abs_z_sum"][0] += temp_dict[sensor_key][group_key + "_abs_z"][-1]
                                     else:
-                                        temp_dict[file][sensor_key][group_key + "_x"] = [sub_l[0]]
-                                        temp_dict[file][sensor_key][group_key + "_y"] = [sub_l[1]]
-                                        temp_dict[file][sensor_key][group_key + "_z"] = [sub_l[2]]
-                                        temp_dict[file][sensor_key][group_key + "_abs_x"] = [abs(float(sub_l[0]))]
-                                        temp_dict[file][sensor_key][group_key + "_abs_y"] = [abs(float(sub_l[1]))]
-                                        temp_dict[file][sensor_key][group_key + "_abs_z"] = [abs(float(sub_l[2]))]
-                                        temp_dict[file][sensor_key][group_key + "_abs_x_sum"] = [float(abs(sub_l[0]))]
-                                        temp_dict[file][sensor_key][group_key + "_abs_y_sum"] = [float(abs(sub_l[1]))]
-                                        temp_dict[file][sensor_key][group_key + "_abs_z_sum"] = [float(abs(sub_l[2]))]
+                                        temp_dict[sensor_key][group_key + "_x"] = [sub_l[0]]
+                                        temp_dict[sensor_key][group_key + "_y"] = [sub_l[1]]
+                                        temp_dict[sensor_key][group_key + "_z"] = [sub_l[2]]
+                                        temp_dict[sensor_key][group_key + "_abs_x"] = [abs(float(sub_l[0]))]
+                                        temp_dict[sensor_key][group_key + "_abs_y"] = [abs(float(sub_l[1]))]
+                                        temp_dict[sensor_key][group_key + "_abs_z"] = [abs(float(sub_l[2]))]
+                                        temp_dict[sensor_key][group_key + "_abs_x_sum"] = [float(abs(sub_l[0]))]
+                                        temp_dict[sensor_key][group_key + "_abs_y_sum"] = [float(abs(sub_l[1]))]
+                                        temp_dict[sensor_key][group_key + "_abs_z_sum"] = [float(abs(sub_l[2]))]
                             elif "given_time" in group_key:
                                 start_offset = 0
                                 for j, val in enumerate(group_list):
                                     if j != 0:
-                                        temp_dict[file][sensor_key]["time_micro"].append(val-start_offset)
+                                        temp_dict[sensor_key]["time_micro"].append(val-start_offset)
                                     else:
                                         start_offset = val
-                                        temp_dict[file][sensor_key]["time_micro"] = [0]
+                                        temp_dict[sensor_key]["time_micro"] = [0]
 
-                file_config_dict[file].update(temp_dict[file])
+                result_data_dict[os.path.basename(file)] = temp_dict
+        except Exception:
+            print(Exception)
+            print("Moving to next file")
 
 
-def write_raw_data_csv(file_config_dict):
-    with open('raw_data.csv', 'w+', newline='') as csvfile:
+def write_raw_data_csv(file_config_dict, dir_path):
+    with open(os.path.join(dir_path, 'raw_data.csv'), 'w+', newline='') as csvfile:
         csv_writer = csv.writer(csvfile)
         for file_name, file_data in file_config_dict.items():
             if "IMPORTANT" not in file_name and "example" not in file_name:
@@ -207,15 +214,19 @@ def write_processed_data_csv(file_config_dict):
 
 def hd5_converter():
     print("starting")
-    hd5_files = get_hd5_files()
+    hd5_files, dir_path = get_hd5_files()
     print("hd5_files", hd5_files)
-    config_file = get_config_file()
-    print("config_file", config_file)
-    file_config_dict = parse_config_file(config_file)
     print("parsing files")
-    parse_hd5_files(hd5_files, file_config_dict)
-    print("writing data")
-    write_raw_data_csv(file_config_dict)
+    result_dict = dict()
+    parse_hd5_files(hd5_files, result_dict)
+    print("writing data to csv")
+    write_raw_data_csv(result_dict, dir_path)
+
+    # print("Getting config file")
+    # config_file = get_config_file()
+    # print("config_file", config_file)
+    # print("Parsing config_file")
+    # file_config_dict = parse_config_file(config_file)
     # processed_data = process_data(file_config_dict)
     # write_processed_data_csv(processed_data)
 
