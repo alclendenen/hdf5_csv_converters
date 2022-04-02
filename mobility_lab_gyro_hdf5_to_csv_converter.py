@@ -1,5 +1,6 @@
 import os
 import json
+import traceback
 from copy import deepcopy
 
 import h5py
@@ -24,11 +25,18 @@ def get_hd5_files():
     return hd5_files, dir_path
 
 
-def get_config_file():
-    for file in os.listdir("./"):
+def get_config_file(file_dir):
+    for file in os.listdir(file_dir):
         if "config" in file:
             return file
     return None
+
+
+def get_config_file():
+    root = tk.Tk()
+    root.withdraw()
+    file_path = filedialog.askopenfilename(title="Select Json Config file")
+    return file_path
 
 
 def parse_config_file(file):
@@ -37,10 +45,42 @@ def parse_config_file(file):
     return file_dict
 
 
+def recursive_traverse_unknown_struct(h5_struct, last_key, result_data_dict):
+    if isinstance(h5_struct, h5py.Group):
+        if last_key:
+            result_data_dict[last_key] = dict()
+        for key in h5_struct.keys():
+            if last_key:
+                recursive_traverse_unknown_struct(h5_struct[key], key, result_data_dict[last_key])
+            else:
+                recursive_traverse_unknown_struct(h5_struct[key], key, result_data_dict)
+    elif isinstance(h5_struct, h5py.Dataset):
+        if last_key:
+            result_data_dict[last_key] = list(h5_struct)
+        else:
+            result_data_dict["dataset_as_list"] = list(h5_struct)
+    # elif isinstance(h5_struct, h5py.AttributeManager):
+    else:
+        print("Unhandled struct type {}".format(type(h5_struct)))
+
+
+def generic_parse_hd5_files(hd5_files, result_data_dict):
+    for file in hd5_files:
+        try:
+            with h5py.File(file, "r") as h5_struct:
+                recursive_traverse_unknown_struct(h5_struct, "", result_data_dict)
+        except Exception:
+            print("ERROR: Had issues with ", file)
+            # traceback.print_exc()
+            print("Moving to next file")
+
+
 def parse_hd5_files(hd5_files, result_data_dict):
     for file in hd5_files:
         try:
             with h5py.File(file, "r") as f:
+                # print(f['Measures']['Duration'])
+                # print(list(f['Measures']['Duration']))
                 # print(list(f['Annotations']))
                 # print(f['Processed']['13746']['Orientation'])
                 # print(list(f['Sensors']['13746']['Accelerometer']))
@@ -116,7 +156,8 @@ def parse_hd5_files(hd5_files, result_data_dict):
 
                 result_data_dict[os.path.basename(file)] = temp_dict
         except Exception:
-            print(Exception)
+            print("ERROR: Had issues with ", file)
+            # traceback.print_exc()
             print("Moving to next file")
 
 
@@ -144,7 +185,9 @@ def trim_data_by_valid_time(data_set, start_time_micro, end_time_micro, new_data
         if val >= end_time_micro:
             end_point = j
             break
-    no_trim = False
+    # TODO put back
+    # no_trim = False
+    no_trim = True
     if end_point < start_point:
         no_trim = True
     for group_key, group_data in data_set.items():
@@ -184,8 +227,8 @@ def process_data(file_config_dict):
                 if 'sacrum' in sensor_key or 'sternum' in sensor_key:
                     processed_data[file_name][sensor_key] = dict()
                     trim_data_by_valid_time(sensor_data, file_data["start_time_micro"], file_data["end_time_micro"], processed_data[file_name][sensor_key])
-                    # TODO back loop out and iter of processed data and add to temp
-                    for group_key, group_data in sensor_data.items():
+                    old_processed_sensor_data = deepcopy(processed_data[file_name][sensor_key])
+                    for group_key, group_data in old_processed_sensor_data.items():
                         if "trimmed" in group_key and "abs" not in group_key:
                             q1, q3, iqr, lower_range, upper_range, outliers, no_outlier_list = find_outliers(group_data)
                             processed_data[file_name][sensor_key][str(group_key) + "outlier_vars"] = [q1, q3, iqr, lower_range, upper_range]
@@ -201,9 +244,13 @@ def write_processed_data_csv(file_config_dict):
         csv_writer = csv.writer(csvfile)
         for file_name, file_data in file_config_dict.items():
             if "IMPORTANT" not in file_name and "example" not in file_name:
+                print(file_name)
                 for sensor_key, sensor_data in file_data.items():
+                    print(sensor_key)
                     if 'sacrum' in sensor_key or 'sternum' in sensor_key:
+                        print(sensor_key)
                         for group_key, group_data in sensor_data.items():
+                            print(group_key)
                             if "outlier_vars" in group_key:
                                 new_row = [file_name, "{}_{}".format(sensor_key, group_key)] + ["Q1, Q3, IQR, Lower_Bound, Upper_Bound"] + list(group_data)
                             else:
@@ -220,15 +267,20 @@ def hd5_converter():
     print("parsing files")
     result_dict = dict()
     parse_hd5_files(hd5_files, result_dict)
-    print("writing data to csv")
+    print("writing raw data to csv")
     write_raw_data_csv(result_dict, dir_path)
 
     # print("Getting config file")
     # config_file = get_config_file()
+    # # config_file = get_config_file(dir_path)
+    # if not config_file:
+    #     return
     # print("config_file", config_file)
     # print("Parsing config_file")
     # file_config_dict = parse_config_file(config_file)
+    # print("Processing data")
     # processed_data = process_data(file_config_dict)
+    # print("Writing processed data to csv")
     # write_processed_data_csv(processed_data)
 
 
