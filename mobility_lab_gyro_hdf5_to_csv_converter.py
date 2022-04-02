@@ -4,7 +4,6 @@ from copy import deepcopy
 
 import h5py
 import csv
-import math
 import numpy as np
 import tkinter as tk
 from tkinter import filedialog
@@ -13,12 +12,15 @@ from tkinter import filedialog
 def get_hd5_files():
     root = tk.Tk()
     root.withdraw()
-    dir_path = filedialog.askdirectory()
+    dir_path = filedialog.askdirectory(title="Select Folder with h5 files")
 
     hd5_files = list()
-    for file in os.listdir(dir_path):
-        if file.endswith(".hd5") or file.endswith(".h5"):
-            hd5_files.append(os.path.join(dir_path, file))
+    if dir_path:
+        for file in os.listdir(dir_path):
+            if file.endswith(".hd5") or file.endswith(".h5") or file.endswith(".hdf5"):
+                hd5_files.append(os.path.join(dir_path, file))
+    else:
+        print("User Canceled")
     return hd5_files, dir_path
 
 
@@ -202,19 +204,18 @@ def write_processed_data_csv(file_config_dict):
                 for sensor_key, sensor_data in file_data.items():
                     if 'sacrum' in sensor_key or 'sternum' in sensor_key:
                         for group_key, group_data in sensor_data.items():
-                            # if "trimmed" in group_key:
                             if "outlier_vars" in group_key:
                                 new_row = [file_name, "{}_{}".format(sensor_key, group_key)] + ["Q1, Q3, IQR, Lower_Bound, Upper_Bound"] + list(group_data)
                             else:
-                                # print(group_key, group_data)
                                 new_row = [file_name, "{}_{}".format(sensor_key, group_key)] + group_data
-                                # new_row = [file_name, "{}_{}".format(sensor_key, group_key)]
                             csv_writer.writerow(new_row)
 
 
 def hd5_converter():
     print("starting")
     hd5_files, dir_path = get_hd5_files()
+    if not dir_path or not hd5_files:
+        return
     print("hd5_files", hd5_files)
     print("parsing files")
     result_dict = dict()
