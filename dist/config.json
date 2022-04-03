@@ -1,0 +1,7 @@
+{
+  "IMPORTANT1": "Each file that you want the program to parse needs and element like the example_patient_1_test_1.hd5",
+  "IMPORTANT2": "where what is in quotes is the name of the file and the start and end time will help trim down the data.",
+  "IMPORTANT3": "every element needs a comma after the curly bracket expect for the last one can't have one",
+  "example_patient_1_test_1.h5": {"start_time_micro":0, "end_time_micro":100000},
+  "example_last_just_leave_as_last": {"start_time_micro":0, "end_time_micro":100000}
+}
