@@ -157,7 +157,6 @@ def trim_data_by_valid_time(data_set, start_time_micro, end_time_micro, new_data
             break
     last_index = len(data_set["time_micro"]) - 1
     end_point = last_index
-    print("end_point ", end_point, " ", end_time_micro)
     for j, val in enumerate(data_set["time_micro"][::-1]):
         if val <= end_time_micro:
             end_point = last_index - j
@@ -165,7 +164,6 @@ def trim_data_by_valid_time(data_set, start_time_micro, end_time_micro, new_data
     no_trim = False
     if end_point <= start_point:
         no_trim = True
-    print("start point ", start_point, "end point", end_point)
     for group_key, group_data in data_set.items():
         if 'abs' not in group_key:
             if no_trim:
