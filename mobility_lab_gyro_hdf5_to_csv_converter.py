@@ -45,36 +45,6 @@ def parse_config_file(file):
     return file_dict
 
 
-def recursive_traverse_unknown_struct(h5_struct, last_key, result_data_dict):
-    if isinstance(h5_struct, h5py.Group):
-        if last_key:
-            result_data_dict[last_key] = dict()
-        for key in h5_struct.keys():
-            if last_key:
-                recursive_traverse_unknown_struct(h5_struct[key], key, result_data_dict[last_key])
-            else:
-                recursive_traverse_unknown_struct(h5_struct[key], key, result_data_dict)
-    elif isinstance(h5_struct, h5py.Dataset):
-        if last_key:
-            result_data_dict[last_key] = list(h5_struct)
-        else:
-            result_data_dict["dataset_as_list"] = list(h5_struct)
-    # elif isinstance(h5_struct, h5py.AttributeManager):
-    else:
-        print("Unhandled struct type {}".format(type(h5_struct)))
-
-
-def generic_parse_hd5_files(hd5_files, result_data_dict):
-    for file in hd5_files:
-        try:
-            with h5py.File(file, "r") as h5_struct:
-                recursive_traverse_unknown_struct(h5_struct, "", result_data_dict)
-        except Exception:
-            print("ERROR: Had issues with ", file)
-            # traceback.print_exc()
-            print("Moving to next file")
-
-
 def parse_hd5_files(hd5_files, result_data_dict):
     for file in hd5_files:
         try:
@@ -162,34 +132,40 @@ def parse_hd5_files(hd5_files, result_data_dict):
 
 
 def write_raw_data_csv(file_config_dict, dir_path):
-    with open(os.path.join(dir_path, 'raw_data.csv'), 'w+', newline='') as csvfile:
-        csv_writer = csv.writer(csvfile)
+    with open(os.path.join(dir_path, 'raw_data.csv'), 'w+', newline='') as csv_file:
+        csv_writer = csv.writer(csv_file)
+        csv_writer.writerow(["file_name", "sensor", "data_type"])
         for file_name, file_data in file_config_dict.items():
             if "IMPORTANT" not in file_name and "example" not in file_name:
                 for sensor_key, sensor_dict in file_data.items():
                     if 'sacrum' in sensor_key or 'sternum' in sensor_key:
                         for group_key, group_data in sensor_dict.items():
-                            new_row = [file_name, "{}_{}".format(sensor_key, group_key)] + group_data
-                            # new_row = [file_name, "{}_{}".format(sensor_key, group_key)]
-                            csv_writer.writerow(new_row)
+                            try:
+                                new_row = [file_name, sensor_key, group_key] + group_data
+                                csv_writer.writerow(new_row)
+                            except Exception:
+                                print("Issues writing {} {} {} to csv".format(file_name, sensor_key, group_key))
+                                new_row = [file_name, sensor_key, group_key, "something_went_wrong"]
+                                csv_writer.writerow(new_row)
 
 
 def trim_data_by_valid_time(data_set, start_time_micro, end_time_micro, new_data_sets):
     start_point = 0
     for i, val in enumerate(data_set["time_micro"]):
-        if val <= start_time_micro:
+        if val >= start_time_micro:
             start_point = i
             break
-    end_point = len(data_set["time_micro"]) - 1
+    last_index = len(data_set["time_micro"]) - 1
+    end_point = last_index
+    print("end_point ", end_point, " ", end_time_micro)
     for j, val in enumerate(data_set["time_micro"][::-1]):
-        if val >= end_time_micro:
-            end_point = j
+        if val <= end_time_micro:
+            end_point = last_index - j
             break
-    # TODO put back
-    # no_trim = False
-    no_trim = True
-    if end_point < start_point:
+    no_trim = False
+    if end_point <= start_point:
         no_trim = True
+    print("start point ", start_point, "end point", end_point)
     for group_key, group_data in data_set.items():
         if 'abs' not in group_key:
             if no_trim:
@@ -218,15 +194,15 @@ def find_outliers(data_set):
     return q1, q3, iqr, lower_range, upper_range, outliers, no_outlier_list
 
 
-def process_data(file_config_dict):
+def process_data(result_dict, config_dict):
     processed_data = dict()
-    for file_name, file_data in file_config_dict.items():
+    for file_name, file_data in result_dict.items():
         processed_data[file_name] = dict()
-        if "IMPORTANT" not in file_name and "example" not in file_name:
+        if "IMPORTANT" not in file_name and "example" not in file_name and file_name in config_dict:
             for sensor_key, sensor_data in file_data.items():
                 if 'sacrum' in sensor_key or 'sternum' in sensor_key:
                     processed_data[file_name][sensor_key] = dict()
-                    trim_data_by_valid_time(sensor_data, file_data["start_time_micro"], file_data["end_time_micro"], processed_data[file_name][sensor_key])
+                    trim_data_by_valid_time(sensor_data, config_dict[file_name]["start_time_micro"], config_dict[file_name]["end_time_micro"], processed_data[file_name][sensor_key])
                     old_processed_sensor_data = deepcopy(processed_data[file_name][sensor_key])
                     for group_key, group_data in old_processed_sensor_data.items():
                         if "trimmed" in group_key and "abs" not in group_key:
@@ -239,23 +215,28 @@ def process_data(file_config_dict):
     return processed_data
 
 
-def write_processed_data_csv(file_config_dict):
-    with open('processed_data.csv', 'w+', newline='') as csvfile:
-        csv_writer = csv.writer(csvfile)
+def write_processed_data_csv(file_config_dict, dir_path):
+    with open(os.path.join(dir_path, 'processed_data.csv'), 'w+', newline='') as csv_file:
+        csv_writer = csv.writer(csv_file)
+        csv_writer.writerow(["file_name", "sensor", "data_type"])
         for file_name, file_data in file_config_dict.items():
             if "IMPORTANT" not in file_name and "example" not in file_name:
-                print(file_name)
                 for sensor_key, sensor_data in file_data.items():
-                    print(sensor_key)
                     if 'sacrum' in sensor_key or 'sternum' in sensor_key:
-                        print(sensor_key)
                         for group_key, group_data in sensor_data.items():
-                            print(group_key)
                             if "outlier_vars" in group_key:
-                                new_row = [file_name, "{}_{}".format(sensor_key, group_key)] + ["Q1, Q3, IQR, Lower_Bound, Upper_Bound"] + list(group_data)
+                                new_row = [file_name, sensor_key, group_key] + ["Q1 Q3 IQR Lower_Bound Upper_Bound"] + list(group_data)
                             else:
-                                new_row = [file_name, "{}_{}".format(sensor_key, group_key)] + group_data
-                            csv_writer.writerow(new_row)
+                                if isinstance(group_data, list):
+                                    new_row = [file_name, sensor_key, group_key] + group_data
+                                else:
+                                    new_row = [file_name, sensor_key, group_key, group_data]
+                            try:
+                                csv_writer.writerow(new_row)
+                            except Exception:
+                                print("Issues writing {} {} {} to csv".format(file_name, sensor_key, group_key))
+                                new_row = [file_name, sensor_key, group_key, "something_went_wrong"]
+                                csv_writer.writerow(new_row)
 
 
 def hd5_converter():
@@ -270,18 +251,17 @@ def hd5_converter():
     print("writing raw data to csv")
     write_raw_data_csv(result_dict, dir_path)
 
-    # print("Getting config file")
-    # config_file = get_config_file()
-    # # config_file = get_config_file(dir_path)
-    # if not config_file:
-    #     return
-    # print("config_file", config_file)
-    # print("Parsing config_file")
-    # file_config_dict = parse_config_file(config_file)
-    # print("Processing data")
-    # processed_data = process_data(file_config_dict)
-    # print("Writing processed data to csv")
-    # write_processed_data_csv(processed_data)
+    print("Getting config file")
+    config_file = get_config_file()
+    # config_file = get_config_file(dir_path)
+    if not config_file:
+        return
+    print("Parsing config_file ", config_file)
+    file_config_dict = parse_config_file(config_file)
+    print("Processing data ")
+    processed_data = process_data(result_dict, file_config_dict)
+    print("Writing processed data to csv")
+    write_processed_data_csv(processed_data, dir_path)
 
 
 if __name__ == '__main__':

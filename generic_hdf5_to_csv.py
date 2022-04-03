@@ -44,20 +44,28 @@ def recursive_traverse_unknown_struct(h5_struct, result_data_dict, last_key=""):
         print("Unhandled struct type {}".format(type(h5_struct)))
 
 
-def recursive_write_unknown_struct_to_csv(h5_struct, csv_file, last_key="", ):
+def recursive_write_unknown_struct_to_csv(h5_struct, csv_writer, last_key="", current_keys=None):
+    if current_keys is None:
+        current_keys = list()
     if isinstance(h5_struct, h5py.Group):
         if last_key:
-            result_data_dict[last_key] = dict()
+            current_keys.append(last_key)
         for key in h5_struct.keys():
             if last_key:
-                recursive_traverse_unknown_struct(h5_struct[key], csv_file[last_key], key)
+                recursive_write_unknown_struct_to_csv(h5_struct[key], csv_writer, key, deepcopy(current_keys))
             else:
-                recursive_traverse_unknown_struct(h5_struct[key], csv_file, key)
+                recursive_write_unknown_struct_to_csv(h5_struct[key], csv_writer, key, deepcopy(current_keys))
     elif isinstance(h5_struct, h5py.Dataset):
         if last_key:
-            result_data_dict[last_key] = list(h5_struct)
+            current_keys.append(last_key)
+            current_keys += list(h5_struct)
         else:
-            result_data_dict["dataset_as_list"] = list(h5_struct)
+            current_keys.append("dataset_as_list")
+            current_keys += list(h5_struct)
+        try:
+            csv_writer.writerow(current_keys)
+        except Exception:
+            print("Error while trying to write csv row")
     # elif isinstance(h5_struct, h5py.AttributeManager):
     else:
         print("Unhandled struct type {}".format(type(h5_struct)))
@@ -79,7 +87,8 @@ def generic_write_hd5_files_to_csv(hd5_files, dir_path):
         try:
             with h5py.File(file, "r") as h5_struct:
                 with open(os.path.join(dir_path, 'raw_data.csv'), 'w+', newline='') as csv_file:
-                    recursive_traverse_unknown_struct(h5_struct, csv_file, "")
+                    csv_writer = csv.writer(csv_file)
+                    recursive_write_unknown_struct_to_csv(h5_struct, csv_writer, "")
         except Exception:
             print("ERROR: Had issues with ", file)
             # traceback.print_exc()
